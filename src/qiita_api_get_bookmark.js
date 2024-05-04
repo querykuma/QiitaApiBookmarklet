@@ -3,7 +3,7 @@ javascript: (() => {/* eslint-disable-line no-unused-labels */
 	 * ブックマークレット名： Qiita記事一覧をコピー
 	 * QiitaのURLから判断してタグか検索語かユーザーIDの記事一覧かをQiita APIで取得してExcelに添付できるタブ区切りでクリップボードにコピーかダウンロードする。
 	 * IPアドレスごとに1時間に60回までのリクエスト制限がある。
-	 * v1.0.0 | MIT License Copyright (c) 2024 Query Kuma
+	 * v1.1.0 | MIT License Copyright (c) 2024 Query Kuma
 	 */
 
 	/* ここからUI関数 */
@@ -182,6 +182,9 @@ javascript: (() => {/* eslint-disable-line no-unused-labels */
 		const m = link.match(/(?<=\bpage=)(\d+)/gu);
 		const n_last_page = Number(m.at(-1));
 
+		/**
+		 * Qiita APIは記事数が0件の場合、n_last_page=0を返す。linkは<?page=0>; rel="last"。
+		 */
 		console.log("n_last_page = ", n_last_page);
 		ui_update_text("qag_last_page", n_last_page);
 
@@ -254,7 +257,16 @@ javascript: (() => {/* eslint-disable-line no-unused-labels */
 			return;
 		}
 
-		if (!json) {
+		if (json) {
+			if (!response.ok) {
+				if (json.type === 'not_found') {
+					const s_error = "見つかりませんでした。";
+					console.error(s_error);
+					ui_show_results(s_error);
+					return;
+				}
+			}
+		} else {
 			if (!response.ok) {
 				const s_error = `サーバーの調子が悪いようです。HTTPステータスコード: ${response.status}`;
 				console.error(s_error);
@@ -276,6 +288,11 @@ javascript: (() => {/* eslint-disable-line no-unused-labels */
 			console.error(s_error);
 			ui_show_results(s_error);
 			return;
+		}
+
+		if (json.length === 0) {
+			console.log("%c取得した記事数が0件です。", "color:hotpink;");
+			ui_update_emphasis("qag_last_page");
 		}
 
 		const r = convert_excel(json);
@@ -345,22 +362,6 @@ javascript: (() => {/* eslint-disable-line no-unused-labels */
 		}
 	};
 
-	const get_user_id = () => {
-		const m = location.href.match(/^https:\/\/qiita\.com\/([^?#/]+)/u);
-
-		if (!m) {
-			return null;
-		}
-
-		const s_user_id = m[1];
-
-		if (["api", "search", "organizations", "official-columns", "official-events", "question-feed", "release-notes", "advent-calendar", "qiita-award", "privacy", "terms", "about", "official-campaigns"].includes(s_user_id)) {
-			return null;
-		}
-
-		return s_user_id;
-	};
-
 	const get_tag_id = () => {
 		const m = location.href.match(/^https:\/\/qiita\.com\/tags\/([^?#/]+)/u);
 
@@ -381,6 +382,41 @@ javascript: (() => {/* eslint-disable-line no-unused-labels */
 
 		const s_search_word = m[1];
 		return s_search_word;
+	};
+
+	const get_user_id = () => {
+		const m = location.href.match(/^https:\/\/qiita\.com\/([^?#/]+)/u);
+
+		if (!m) {
+			return null;
+		}
+
+		const s_user_id = m[1];
+
+		if (["api", "search", "organizations", "official-columns", "official-events", "question-feed", "release-notes", "advent-calendar", "qiita-award", "privacy", "terms", "about", "official-campaigns", "stock", "drafts", "badges", "patches", "settings", "trend", "timeline", "opportunities"].includes(s_user_id)) {
+			return null;
+		}
+
+		return s_user_id;
+	};
+
+	let get_url_info = () => {
+		const s_tag_id = get_tag_id();
+		if (s_tag_id) {
+			return ["tag", s_tag_id];
+		}
+
+		const s_search_word = get_search_word();
+		if (s_search_word) {
+			return ["search", s_search_word];
+		}
+
+		const s_user_id = get_user_id();
+		if (s_user_id) {
+			return ["user", s_user_id];
+		}
+
+		return [null, null];
 	};
 
 	const get_json = (s_type, s_arg, s_arg2) => {
@@ -423,27 +459,15 @@ javascript: (() => {/* eslint-disable-line no-unused-labels */
 			throw new Error(s_alert);
 		}
 
-		const s_tag_id = get_tag_id();
-		if (s_tag_id) {
-			ui_open_dialog("tag", s_tag_id, start_fetch);
-			return;
+		let [s_type, s_arg] = get_url_info();
+
+		if (!s_type) {
+			const s_alert = `未対応のURL「${location.href}」です。タグも検索語もユーザーIDも見つかりませんでした。`;
+			alert(s_alert);
+			throw new Error(s_alert);
 		}
 
-		const s_search_word = get_search_word();
-		if (s_search_word) {
-			ui_open_dialog("search", s_search_word, start_fetch);
-			return;
-		}
-
-		const s_user_id = get_user_id();
-		if (s_user_id) {
-			ui_open_dialog("user", s_user_id, start_fetch);
-			return;
-		}
-
-		const s_alert = `未対応のURL「${location.href}」です。タグも検索語もユーザーIDも見つかりませんでした。`;
-		alert(s_alert);
-		throw new Error(s_alert);
+		ui_open_dialog(s_type, s_arg, start_fetch);
 	};
 
 	main();
