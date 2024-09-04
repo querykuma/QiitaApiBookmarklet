@@ -1,9 +1,9 @@
 javascript: (() => {/* eslint-disable-line no-unused-labels */
 	/**
 	 * ブックマークレット名： Qiita記事一覧をコピー
-	 * QiitaのURLから判断してタグか検索語かユーザーIDの記事一覧かをQiita APIで取得してExcelに添付できるタブ区切りでクリップボードにコピーかダウンロードする。
+	 * QiitaのURLから判断してタグか検索語かユーザーIDの記事一覧か組織IDの記事一覧かをQiita APIで取得してExcelに添付できるタブ区切りでクリップボードにコピーかダウンロードする。
 	 * IPアドレスごとに1時間に60回までのリクエスト制限がある。
-	 * v1.1.0 | MIT License Copyright (c) 2024 Query Kuma
+	 * v1.2.0 | MIT License Copyright (c) 2024 Query Kuma
 	 */
 
 	/* ここからUI関数 */
@@ -38,6 +38,12 @@ javascript: (() => {/* eslint-disable-line no-unused-labels */
 				break;
 
 			case "search":
+				qag_target.innerHTML = `<div>
+					検索語： <span>${decodeURIComponent(s_arg)}</span>
+				</div>`;
+				break;
+
+			case "organization":
 				qag_target.innerHTML = `<div>
 					検索語： <span>${decodeURIComponent(s_arg)}</span>
 				</div>`;
@@ -259,7 +265,7 @@ javascript: (() => {/* eslint-disable-line no-unused-labels */
 
 		if (json) {
 			if (!response.ok) {
-				if (json.type === 'not_found') {
+				if (json.type === "not_found") {
 					const s_error = "見つかりませんでした。";
 					console.error(s_error);
 					ui_show_results(s_error);
@@ -384,6 +390,17 @@ javascript: (() => {/* eslint-disable-line no-unused-labels */
 		return s_search_word;
 	};
 
+	const get_organization_id = () => {
+		const m = location.href.match(/^https:\/\/qiita\.com\/organizations\/([^/]+$)/u);
+
+		if (!m) {
+			return null;
+		}
+
+		const s_organization_id = m[1];
+		return s_organization_id;
+	};
+
 	const get_user_id = () => {
 		const m = location.href.match(/^https:\/\/qiita\.com\/([^?#/]+)/u);
 
@@ -393,7 +410,7 @@ javascript: (() => {/* eslint-disable-line no-unused-labels */
 
 		const s_user_id = m[1];
 
-		if (["api", "search", "organizations", "official-columns", "official-events", "question-feed", "release-notes", "advent-calendar", "qiita-award", "privacy", "terms", "about", "official-campaigns", "stock", "drafts", "badges", "patches", "settings", "trend", "timeline", "opportunities"].includes(s_user_id)) {
+		if (["api", "search", "official-columns", "official-events", "question-feed", "release-notes", "advent-calendar", "qiita-award", "privacy", "terms", "about", "official-campaigns", "stock", "drafts", "badges", "patches", "settings", "trend", "timeline", "opportunities"].includes(s_user_id)) {
 			return null;
 		}
 
@@ -409,6 +426,11 @@ javascript: (() => {/* eslint-disable-line no-unused-labels */
 		const s_search_word = get_search_word();
 		if (s_search_word) {
 			return ["search", s_search_word];
+		}
+
+		const s_organization_id = get_organization_id();
+		if (s_organization_id) {
+			return ["organization", `org:${s_organization_id}`];
 		}
 
 		const s_user_id = get_user_id();
@@ -427,6 +449,11 @@ javascript: (() => {/* eslint-disable-line no-unused-labels */
 				return fetch_json(s_arg, fetch_tag_page);
 
 			case "search":
+				console.log(`検索語:「${decodeURIComponent(s_arg)}」でfetch開始します。`);
+
+				return fetch_json(s_arg, fetch_search_page);
+
+			case "organization":
 				console.log(`検索語:「${decodeURIComponent(s_arg)}」でfetch開始します。`);
 
 				return fetch_json(s_arg, fetch_search_page);
@@ -462,7 +489,7 @@ javascript: (() => {/* eslint-disable-line no-unused-labels */
 		let [s_type, s_arg] = get_url_info();
 
 		if (!s_type) {
-			const s_alert = `未対応のURL「${location.href}」です。タグも検索語もユーザーIDも見つかりませんでした。`;
+			const s_alert = `未対応のURL「${location.href}」です。タグも検索語もユーザーIDも組織IDも見つかりませんでした。`;
 			alert(s_alert);
 			throw new Error(s_alert);
 		}
